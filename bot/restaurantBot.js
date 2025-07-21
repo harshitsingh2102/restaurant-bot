@@ -1,28 +1,29 @@
 const { ActivityHandler } = require('botbuilder');
-const getIntentFromCLU = require('../services/azureCLU');
+const getIntentFromCLU = require('../services/witService'); // using Wit.ai here
 const restaurantController = require('../controllers/restaurantController');
 const orderController = require('../controllers/orderController');
 const reservationController = require('../controllers/reservationController');
+const { createReservation } = require('../controllers/reservationController');
+const recommendService = require('../services/recommendation'); // <-- integrated
 
 class RestaurantBot extends ActivityHandler {
   constructor() {
     super();
-
-    // Simple in-memory conversation state
     this.conversationState = {};
 
     this.onMessage(async (context, next) => {
       const userId = context.activity.from.id;
       const userMessage = context.activity.text.trim();
 
-      // Initialize conversation state if not present
+      console.log(`📨 User said: ${userMessage}`);
+
       if (!this.conversationState[userId]) {
         this.conversationState[userId] = { step: null, data: {} };
       }
 
       const state = this.conversationState[userId];
 
-      // 👉 Multi-turn Reservation Flow
+      // Reservation conversation flow
       if (state.step === 'awaiting_date') {
         state.data.date = userMessage;
         state.step = 'awaiting_time';
@@ -35,11 +36,11 @@ class RestaurantBot extends ActivityHandler {
         return;
       } else if (state.step === 'awaiting_guests') {
         state.data.guests = parseInt(userMessage);
-        state.step = null; // Clear state after this
+        state.step = null;
 
         const reservationData = {
-          userId: 1, // Dummy user ID; replace with real session later
-          restaurantId: 2, // Dummy restaurant; replace based on selection later
+          userId: 1, // placeholder or session-based
+          restaurantId: 2, // you may want to ask or detect this too
           date: state.data.date,
           time: state.data.time,
           guests: state.data.guests,
@@ -47,34 +48,36 @@ class RestaurantBot extends ActivityHandler {
         };
 
         try {
-          const result = await reservationController.makeReservation(reservationData);
-          await context.sendActivity(`✅ Reservation confirmed for ${state.data.guests} guest(s) on ${state.data.date} at ${state.data.time}.\n🪪 Reservation ID: ${result.reservationId}`);
-        } catch (error) {
-          console.error('Reservation Error:', error);
-          await context.sendActivity('❌ Sorry, something went wrong while booking your reservation.');
+          const reservation = await createReservation(reservationData);
+          await context.sendActivity(`✅ Reservation confirmed!\n📅 ${reservation.date} 🕒 ${reservation.time} 👥 ${reservation.partySize} guests\n🪪 ID: ${reservation.id}`);
+        } catch (err) {
+          console.error('❌ Reservation Error:', err.message);
+          await context.sendActivity('❌ Could not complete the reservation.');
         }
 
-        // Clear conversation state
         this.conversationState[userId] = { step: null, data: {} };
         return;
       }
 
-      // Step 1: Detect Intent from Azure CLU
+      // Intent detection
       const intent = await getIntentFromCLU(userMessage);
-      let reply;
+      console.log(`🎯 Detected Intent: ${intent}`);
 
-      // Step 2: Handle intents
+      let reply = '';
+
       switch (intent) {
         case 'FindRestaurant':
           const results = await restaurantController.searchRestaurants(userMessage);
           reply = results.length > 0
-            ? `🍽️ I found these restaurants:\n` + results.map(r => `- ${r.name}`).join('\n')
-            : `😕 Sorry, I couldn't find any matching restaurants.`;
+            ? `🍽️ Here are some restaurants:\n${results.map(r => `- ${r.name}`).join('\n')}`
+            : `😕 No matching restaurants found.`;
           break;
 
         case 'MakeReservation':
+          // Start reservation flow
           state.step = 'awaiting_date';
-          reply = '📅 Sure! What date would you like to make the reservation for? (e.g., 2025-07-10)';
+          state.data = {};
+          reply = '📅 Sure! What date would you like to reserve a table for?';
           break;
 
         case 'PlaceOrder':
@@ -91,24 +94,35 @@ class RestaurantBot extends ActivityHandler {
           try {
             const orderResult = await orderController.placeOrder(dummyOrder);
             reply = orderResult.success
-              ? `✅ Your order has been placed successfully!\n🧾 Order ID: ${orderResult.orderId}`
-              : `❌ Sorry, we couldn't place your order. Please try again.`;
+              ? `✅ Order placed!\n🧾 Order ID: ${orderResult.orderId}`
+              : `❌ Could not place your order.`;
+          } catch (err) {
+            console.error('Order Error:', err.message);
+            reply = `⚠️ Error while placing your order.`;
+          }
+          break;
+
+        case 'RecommendRestaurant':
+          try {
+            const recommendations = await recommendService.getRecommendations(userId);
+            reply = recommendations.length
+              ? `🌟 Recommended Restaurants:\n${recommendations.map(r => `- ${r.name}`).join('\n')}`
+              : '😕 Sorry, no recommendations found at the moment.';
           } catch (error) {
-            console.error('Order Error:', error);
-            reply = `⚠️ There was an error while placing your order.`;
+            console.error('Recommendation Error:', error.message);
+            reply = '⚠️ Failed to get recommendations.';
           }
           break;
 
         case 'Greeting':
-          reply = `👋 Hello! I'm your Restaurant Bot.\nYou can ask me to find restaurants, make reservations, or place an order.`;
+          reply = `👋 Hello! I can help you find restaurants, make reservations, place orders, or recommend great places. Just let me know what you need!`;
           break;
 
         default:
-          reply = `🤖 Sorry, I didn't understand that. Can you please rephrase?`;
+          reply = `🤖 Sorry, I didn’t understand that. Can you try rephrasing?`;
           break;
       }
 
-      // Step 3: Send reply
       await context.sendActivity(reply);
       await next();
     });

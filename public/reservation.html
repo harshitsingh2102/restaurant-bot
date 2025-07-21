@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reserve Table</title>
+</head>
+<body>
+  <h2>Table Reservation</h2>
+  <form id="reserveForm">
+    <input type="text" placeholder="User ID" name="userId" required />
+    <input type="date" name="date" required />
+    <input type="time" name="time" required />
+    <input type="number" placeholder="Number of People" name="partySize" required />
+    <button type="submit">Book Table</button>
+  </form>
+  <script>
+    document.getElementById('reserveForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const payload = Object.fromEntries(formData.entries());
+      const res = await fetch('/api/reservations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      alert(result.message || 'Reservation placed!');
+    });
+  </script>
+</body>
+</html>

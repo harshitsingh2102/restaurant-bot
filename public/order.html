@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order Food</title>
+</head>
+<body>
+  <h2>Order Food</h2>
+  <form id="orderForm">
+    <input type="text" placeholder="User ID" name="userId" required />
+    <input type="text" placeholder="Menu Item ID" name="menuId" required />
+    <input type="number" placeholder="Quantity" name="quantity" required />
+    <button type="submit">Pay with Razorpay</button>
+  </form>
+
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+    document.getElementById('orderForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const payload = Object.fromEntries(formData.entries());
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (data.orderId) {
+        const options = {
+          key: 'YOUR_RAZORPAY_KEY_ID',
+          amount: data.amount,
+          currency: 'INR',
+          name: 'Restaurant Bot',
+          description: 'Food Order',
+          order_id: data.razorpayOrderId,
+          handler: function (res) {
+            alert('Payment Successful');
+          },
+        };
+        new Razorpay(options).open();
+      } else {
+        alert('Failed to create order');
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,23 +1,18 @@
 // services/paymentService.js
 
-async function processPayment({ orderId, amount, userId }) {
-  console.log(`💳 Processing payment for Order ID: ${orderId}, Amount: ₹${amount}, User ID: ${userId}`);
+const generateUPIPayment = (amount, note = "Restaurant Bot Order") => {
+  const upiId = "hs0801793@okhdfcbank"; // Replace with your real UPI ID
+  const payeeName = "Restaurant Bot";
+  
+  const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`;
 
-  // Simulate a delay (like calling Stripe API)
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  // Dummy success logic
-  const isSuccess = true;
-
-  if (isSuccess) {
-    console.log("✅ Payment successful!");
-    return { success: true, transactionId: `TXN-${Date.now()}` };
-  } else {
-    console.log("❌ Payment failed.");
-    return { success: false, error: "Payment declined" };
-  }
-}
+  return {
+    upiId,
+    qrMessage: `📲 Please scan this UPI QR or use the link to pay ₹${amount}`,
+    upiLink
+  };
+};
 
 module.exports = {
-  processPayment
+  generateUPIPayment
 };
